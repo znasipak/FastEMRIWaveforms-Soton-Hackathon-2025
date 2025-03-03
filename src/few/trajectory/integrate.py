@@ -270,7 +270,7 @@ class Integrate:
             self.bad_num = 0
 
             # action check allows user to add adjustments easily
-            self.action_function(t, y)
+            t, y = self.action_function(t, y, spline_info)
 
             # stop check determines when to stop the integration
             stop_check = self.stop_integrate_check(t, y)
@@ -303,7 +303,7 @@ class Integrate:
         if hasattr(self, "finishing_function"):
             self.finishing_function(t, y)
 
-    def action_function(self, t: float, y: np.ndarray) -> None:
+    def action_function(self, t: float, y: np.ndarray, spline_info) -> None:
         """Act on the integrator.
 
         Args:
@@ -311,7 +311,14 @@ class Integrate:
             y: Current position of integrator.
 
         """
-        return None
+
+        # check the resonance criterion
+        if self.handle_resonances:
+            past_resonance = self.resonance_module.check_resonance_condition(t, y)
+            if past_resonance:
+                pass  # do something
+
+        return t, y
 
     def initialize_integrator(
         self,
