@@ -1,15 +1,25 @@
 import numpy as np
 from scipy.optimize import brentq
 
+from multispline.spline import CubicSpline
+
 from ..utils.utility import (
-    get_fundamental_frequencies,
+    ELQ_to_pex,
+    get_kerr_geo_constants_of_motion,
+#    get_fundamental_frequencies,
 )
 
 class ResonanceHandler:
     
-    
     def __init__(self):
         self.after_res = 0
+        
+        #Load the jump data and interpolate it
+        jump_data = np.loadtxt("/Users/niels/Downloads/resonance-a09_x1_n1k2m-2.csv", delimiter=",")
+        self.jump_E = CubicSpline(jump_data[:,1], jump_data[:,2])
+        self.jump_L = CubicSpline(jump_data[:,1], jump_data[:,3])
+        self.jump_Q = CubicSpline(jump_data[:,1], jump_data[:,4])
+        
         
     # we need to return the t and y on the resonance surface, and also the updated spline information (TODO)    
     def check_for_resonance_crossing(self, t, y, spline_info, integrator):
@@ -59,12 +69,12 @@ class ResonanceHandler:
             + rcont8[4:6] * (4 * s3 - 15 * s4 + 18 * s5 - 7 * s6)
             )
         
-        Omega_phi_direct, Omega_theta_direct, Omega_r_direct = get_fundamental_frequencies(integrator.a,p,e,x)    
+        #Omega_phi_direct, Omega_theta_direct, Omega_r_direct = get_fundamental_frequencies(integrator.a,p,e,x)    
         
         # Evaluate the frequencies at the end of the ODE step
         Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(1)
         
-        print(Omega_theta_spline/Omega_r_spline, Omega_theta_direct/Omega_r_direct, 2*Omega_theta_spline - 3*Omega_r_spline)
+        #print(Omega_theta_spline/Omega_r_spline, Omega_theta_direct/Omega_r_direct, 2*Omega_theta_spline - 3*Omega_r_spline)
         
         def surface_def(s):
             Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(s)
@@ -75,30 +85,28 @@ class ResonanceHandler:
         Deltat = t - t_step_minus1
         
         # Check if we cross a resonance
-        if((2*Omega_theta_spline - 3*Omega_r_spline > 0) and self.after_res == 0):
-            print("Surface crossed near t = ", t, " where p = ", p, ", e = ", e, " x = ", x)
+        if((surface_def(1) > 0) and self.after_res == 0):
+            #print("Surface crossed near t = ", t, " where p = ", p, ", e = ", e, " x = ", x)
             s_surface = brentq(surface_def, 0, 1)
             t_surface = s_surface*Deltat + t_step_minus1
             p_surface, e_surface, x_surface, Phi_phi_surface, Phi_theta_surface, Phi_r_surface = y_of_s(s_surface)
-            print("Surface at s = ", s_surface)
-            print("Surface at t = ", t_surface, " where p = ", p_surface, ", e = ", e_surface, " x = ", x_surface)
+            #print("Surface at s = ", s_surface)
+            #print("Surface at t = ", t_surface, " where p = ", p_surface, ", e = ", e_surface, " x = ", x_surface)
             
+            E_surface, L_surface, Q_surface = get_kerr_geo_constants_of_motion(integrator.a, p_surface, e_surface, x_surface)
             
-            delta_p = 0;
-            delta_e = 0.1;
-            delta_x = 0;
+            new_p, new_e, new_x = ELQ_to_pex(integrator.a, E_surface + self.jump_E(e_surface), L_surface + self.jump_L(e_surface), Q_surface + self.jump_Q(e_surface))
         
             t = t_surface
-            y[0] = p_surface + delta_p
-            y[1] = e_surface + delta_e
-            y[2] = x_surface + delta_x
+            y[0] = new_p
+            y[1] = new_e
+            y[2] = new_x
             y[3] = Phi_phi_surface
             y[4] = Phi_theta_surface
             y[5] = Phi_r_surface
             
-            print("Parameters after resonances = ", t_surface, " where p = ", y[0], ", e = ", y[1], " x = ", y[2])
+            #print("Parameters after resonances = ", t_surface, " where p = ", y[0], ", e = ", y[1], " x = ", y[2])
             
-        
             self.after_res = 1
 
         # we need to return the t and y on the resonance surface, and also the updated spline information (TODO)
