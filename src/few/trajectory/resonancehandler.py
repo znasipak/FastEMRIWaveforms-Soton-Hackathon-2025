@@ -11,8 +11,12 @@ from ..utils.utility import (
 
 class ResonanceHandler:
     
-    def __init__(self):
+    def __init__(self, kappa_r, kappa_theta, kappa_phi):
         self.after_res = 0
+        
+        self.kappa_r = kappa_r
+        self.kappa_theta = kappa_theta
+        self.kappa_phi = kappa_phi
         
         #Load the jump data and interpolate it
         jump_data = np.loadtxt("/Users/niels/Downloads/resonance-a09_x1_n1k2m-2.csv", delimiter=",")
@@ -78,7 +82,7 @@ class ResonanceHandler:
         
         def surface_def(s):
             Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(s)
-            return 2*Omega_theta_spline - 3*Omega_r_spline
+            return self.kappa_theta*Omega_theta_spline + self.kappa_r*Omega_r_spline
             
         # To convert to t we need Delta t
         t_step_minus1 = integrator._integrator_t_cache[integrator.traj_step - 1]/integrator.Msec
