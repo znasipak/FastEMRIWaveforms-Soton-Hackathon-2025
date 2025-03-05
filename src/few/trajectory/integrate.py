@@ -546,20 +546,21 @@ class Integrate:
 
         """
 
-        if self.integrate_backwards:
-            # this function handles the pex/ELQ conversion internally, in case of ELQ-specific outer boundaries
-            distance_to_grid_boundary = self.distance_to_outer_boundary(y)
-            if distance_to_grid_boundary < 0:
-                return True
-        else:
-            p, e, x = self.get_pex(y)
-            if not self.enforce_schwarz_sep:
-                p_sep = get_separatrix(self.a, e, x)
-            else:
-                p_sep = 6 + 2 * e
+        # if self.integrate_backwards:
+        #     # this function handles the pex/ELQ conversion internally, in case of ELQ-specific outer boundaries
+        #     distance_to_grid_boundary = self.distance_to_outer_boundary(y)
+        #     if distance_to_grid_boundary < 0:
+        #         return True
+        # else:
+        #     p, e, x = self.get_pex(y)
+        #     if not self.enforce_schwarz_sep:
+        #         p_sep = get_separatrix(self.a, e, x)
+        #     else:
+        #         p_sep = 6 + 2 * e
 
-            if p - p_sep < self.separatrix_buffer_dist:
-                return True
+        #     if p - p_sep < self.separatrix_buffer_dist:
+        #         return True
+        return False
 
     def inner_func_forward(self, t_step):
         """
