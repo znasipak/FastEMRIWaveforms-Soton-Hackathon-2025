@@ -38,6 +38,10 @@ class ODEBase:
         )
 
     @property
+    def inspiral_type(self):
+        return 'inspiral'
+
+    @property
     def convert_Y(self):
         """
         If True, the inclination coordinate is assumed to be Y and is converted accordingly.

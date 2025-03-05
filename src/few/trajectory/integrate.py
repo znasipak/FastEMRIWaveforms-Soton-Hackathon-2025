@@ -545,7 +545,15 @@ class Integrate:
             ``True`` if integration should be stopped. ``False`` otherwise.
 
         """
-
+        if(self.func.inspiral_type == 'inspiral'):
+            p, e, x = self.get_pex(y)
+            if(p > 6.5):
+                return False
+            else:
+                return True
+        elif(self.func.inspiral_type == 'plunge'):
+            return False
+        
         # if self.integrate_backwards:
         #     # this function handles the pex/ELQ conversion internally, in case of ELQ-specific outer boundaries
         #     distance_to_grid_boundary = self.distance_to_outer_boundary(y)
@@ -560,7 +568,7 @@ class Integrate:
 
         #     if p - p_sep < self.separatrix_buffer_dist:
         #         return True
-        return False
+        #return False
 
     def inner_func_forward(self, t_step):
         """
@@ -575,14 +583,16 @@ class Integrate:
             )
         )[0]
 
-        p, e, x = self.get_pex(self._y_inner_cache)
-        # get the separatrix value at this new step
-        if not self.enforce_schwarz_sep:
-            p_sep = get_separatrix(self.a, e, x)
-        else:
-            p_sep = 6 + 2 * e
+        # p, e, x = self.get_pex(self._y_inner_cache)
+        # # get the separatrix value at this new step
+        # if not self.enforce_schwarz_sep:
+        #     p_sep = get_separatrix(self.a, e, x)
+        # else:
+        #     p_sep = 6 + 2 * e
 
-        return p - (p_sep + self.separatrix_buffer_dist)  # we want this to go to zero
+        # return p - (p_sep + self.separatrix_buffer_dist)  # we want this to go to zero
+        p, e, x = self.get_pex(self._y_inner_cache)
+        return p - 6.5
 
     def inner_func_backward(self, t_step):
         """
