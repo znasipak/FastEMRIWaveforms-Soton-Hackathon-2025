@@ -551,6 +551,12 @@ class Integrate:
                 return False
             else:
                 return True
+        elif(self.func.inspiral_type == 'transition'):
+            p, e, x = self.get_pex(y)
+            if(p > 5):
+                return False
+            else:
+                return True
         elif(self.func.inspiral_type == 'plunge'):
             return False
         
@@ -592,7 +598,10 @@ class Integrate:
 
         # return p - (p_sep + self.separatrix_buffer_dist)  # we want this to go to zero
         p, e, x = self.get_pex(self._y_inner_cache)
-        return p - 6.5
+        if(self.func.inspiral_type == 'inspiral'):
+            return p - 6.5
+        else:
+            return p - 5
 
     def inner_func_backward(self, t_step):
         """
