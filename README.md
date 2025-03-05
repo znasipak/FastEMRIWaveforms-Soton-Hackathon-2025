@@ -1,6 +1,6 @@
 # few: Fast EMRI Waveforms
 
-This package contains the highly modular framework for fast and accurate extreme mass ratio inspiral (EMRI) waveforms from [arxiv.org/2104.04582](https://arxiv.org/abs/2104.04582) and [arxiv.org/2008.06071](https://arxiv.org/abs/2008.06071). The waveforms in this package combine a variety of separately accessible modules to form EMRI waveforms on both CPUs and GPUs. Generally, the modules fall into four categories: trajectory, amplitudes, summation, and utilities. Please see the [documentation](https://bhptoolkit.org/FastEMRIWaveforms/) for further information on these modules. The code can be found on Github [here](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms). The data necessary for various modules in this package will automatically download the first time it is needed. If you would like to view the data, it can be found on [Zenodo](https://zenodo.org/record/3981654#.XzS_KRNKjlw). The current and all past code release zip files can also be found on Zenodo [here](https://zenodo.org/record/3969004). Please see the [citation](#citation) section below for information on citing FEW.
+This package contains the highly modular framework for fast and accurate extreme mass ratio inspiral (EMRI) waveforms from [arxiv.org/2104.04582](https://arxiv.org/abs/2104.04582) and [arxiv.org/2008.06071](https://arxiv.org/abs/2008.06071). The waveforms in this package combine a variety of separately accessible modules to form EMRI waveforms on both CPUs and GPUs. Generally, the modules fall into four categories: trajectory, amplitudes, summation, and utilities. Please see the [documentation](https://bhptoolkit.org/FastEMRIWaveforms/) for further information on these modules. The code can be found on Github [here](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms). The data necessary for various modules in this package will automatically download the first time it is needed. If you would like to view the data, it can be found on [Zenodo](https://zenodo.org/record/3981654). The current and all past code release zip files can also be found on Zenodo [here](https://zenodo.org/record/3969004). Please see the [citation](#citation) section below for information on citing FEW.
 
 This package is a part of the [Black Hole Perturbation Toolkit](https://bhptoolkit.org/).
 
@@ -115,9 +115,18 @@ cd FastEMRIWaveforms
 git checkout Kerr_Equatorial_Eccentric
 ```
 
-Now create an environment (here Mac OSX arm)
+Now create an environment (here Mac OSX arm M chip)
 ```
-conda create -n few_env -y -c conda-forge python=3.12 clangxx_osx-arm64 clang_osx-arm64 h5py wget gsl liblapacke lapack openblas fortran-compiler scipy numpy matplotlib jupyter
+conda create -n few_env -y -c conda-forge -y python=3.12 clangxx_osx-arm64 clang_osx-arm64 h5py wget gsl liblapacke lapack openblas fortran-compiler scipy numpy matplotlib jupyter
+```
+
+Instead for MACOS:
+```
+conda create -n few_env -c conda-forge -y clangxx_osx-64 clang_osx-64 h5py wget gsl liblapacke lapack openblas fortran-compiler scipy numpy matplotlib jupyter python=3.12
+```
+
+And activate the environment
+```
 conda activate few_env
 ```
 
@@ -236,7 +245,7 @@ To run the tests, open a terminal in a directory containing the sources of FEW a
 ```sh
 $ git clone https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms.git
 $ cd FastEMRIWaveforms
-$ python -m unittest discover
+$ python -m few.tests  # or "python -m unittest discover"
 ...
 ----------------------------------------------------------------------
 Ran 20 tests in 71.514s
