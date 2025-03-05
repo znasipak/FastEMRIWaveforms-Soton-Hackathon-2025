@@ -107,6 +107,17 @@ class ResonanceHandler:
             
             #print("Parameters after resonances = ", t_surface, " where p = ", y[0], ", e = ", y[1], " x = ", y[2])
             
+            #update the spline info (computed in FEW_splines.nb)
+            spline_info[:, 0] = rcont1
+            spline_info[:, 1] = s_surface*(rcont2 - (-1 + s_surface)*(rcont3 + s_surface*(rcont4 - (-1 + s_surface)*(rcont5 + s_surface*(rcont6 - (-1 + s_surface)*(rcont7 + rcont8*s_surface))))))
+            spline_info[:, 2] = s_surface**2*(rcont3 + (-1 + s_surface)*(rcont4 - (-1 + s_surface)*(rcont5 + s_surface*(rcont6 - (-1 + s_surface)*(rcont7 + rcont8*s_surface)))))
+            spline_info[:, 3] = s_surface**3*(rcont4 + (-1 + s_surface)*(-2*rcont5 + rcont6 - 3*rcont6*s_surface + (-1 + s_surface)*(rcont7*(-1 + 4*s_surface) + rcont8*s_surface*(-2 + 5*s_surface))))
+            spline_info[:, 4] = s_surface**4*(rcont5 - (-1 + s_surface)*(-2*rcont6 + (-1 + s_surface)*(3*rcont7 - rcont8 + 4*rcont8*s_surface)))
+            spline_info[:, 5] = s_surface**5*(rcont6 - 3*(-1 + s_surface)*(rcont7 + rcont8*(-1 + 2*s_surface)))
+            spline_info[:, 6] = (rcont7 + 3*rcont8*(-1 + s_surface))*s_surface**6
+            spline_info[:, 7] = rcont8*s_surface**7
+            
+            
             self.after_res = 1
 
         # we need to return the t and y on the resonance surface, and also the updated spline information (TODO)
