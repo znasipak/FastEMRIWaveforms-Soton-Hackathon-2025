@@ -533,6 +533,14 @@ class Integrate:
         self.generating_trajectory = False
         return self.trajectory
 
+    def rp_insp_end(self, eps):
+        q = 1/eps
+        nu = q/(1+q)**2
+        return (0.0680414 - 0.0340349988 * nu **(1./4.))**(-2./3.)
+
+    def rp_trans_end(self, eps):
+        return 4.85
+
     def stop_integrate_check(self, t: float, y: np.ndarray) -> bool:
         """Stop the inspiral when close to the separatrix (forwards integration)
             or when close to the outer grid boundary (backwards integration).
@@ -547,13 +555,13 @@ class Integrate:
         """
         if(self.func.inspiral_type == 'inspiral'):
             p, e, x = self.get_pex(y)
-            if(p > 6.5):
+            if(p > self.rp_insp_end(self.epsilon)):
                 return False
             else:
                 return True
         elif(self.func.inspiral_type == 'transition'):
             p, e, x = self.get_pex(y)
-            if(p > 5):
+            if(p > self.rp_trans_end(self.epsilon)):
                 return False
             else:
                 return True
@@ -599,9 +607,9 @@ class Integrate:
         # return p - (p_sep + self.separatrix_buffer_dist)  # we want this to go to zero
         p, e, x = self.get_pex(self._y_inner_cache)
         if(self.func.inspiral_type == 'inspiral'):
-            return p - 6.5
+            return p - self.rp_insp_end(self.epsilon)
         else:
-            return p - 5
+            return p - self.rp_trans_end(self.epsilon)
 
     def inner_func_backward(self, t_step):
         """
