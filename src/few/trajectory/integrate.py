@@ -541,6 +541,9 @@ class Integrate:
     def rp_trans_end(self, eps):
         return 4.85
 
+    def rsp_plunge_end(self, eps):
+        return -70
+
     def stop_integrate_check(self, t: float, y: np.ndarray) -> bool:
         """Stop the inspiral when close to the separatrix (forwards integration)
             or when close to the outer grid boundary (backwards integration).
@@ -553,20 +556,23 @@ class Integrate:
             ``True`` if integration should be stopped. ``False`` otherwise.
 
         """
+        p, e, x = self.get_pex(y)
         if(self.func.inspiral_type == 'inspiral'):
-            p, e, x = self.get_pex(y)
             if(p > self.rp_insp_end(self.epsilon)):
                 return False
             else:
                 return True
         elif(self.func.inspiral_type == 'transition'):
-            p, e, x = self.get_pex(y)
             if(p > self.rp_trans_end(self.epsilon)):
                 return False
             else:
                 return True
         elif(self.func.inspiral_type == 'plunge'):
-            return False
+            # We switch to using ps = rs(p)
+            if(p > self.rsp_plunge_end(self.epsilon)):
+                return False
+            else:
+                return True
         
         # if self.integrate_backwards:
         #     # this function handles the pex/ELQ conversion internally, in case of ELQ-specific outer boundaries
@@ -608,8 +614,10 @@ class Integrate:
         p, e, x = self.get_pex(self._y_inner_cache)
         if(self.func.inspiral_type == 'inspiral'):
             return p - self.rp_insp_end(self.epsilon)
-        else:
+        elif(self.func.inspiral_type == 'transition'):
             return p - self.rp_trans_end(self.epsilon)
+        else:
+            return p - self.rsp_plunge_end(self.epsilon)
 
     def inner_func_backward(self, t_step):
         """
