@@ -4,12 +4,13 @@ from scipy.optimize import brentq
 from ..utils.utility import (
     ELQ_to_pex,
     get_kerr_geo_constants_of_motion,
-#    get_fundamental_frequencies,
+    get_fundamental_frequencies,
 )
 
 class ResonanceHandler:
     
     def __init__(self, kappa_r, kappa_theta, kappa_phi, jumps):
+        self.first_run = 1
         self.after_res = 0
         
         self.kappa_r = kappa_r
@@ -61,32 +62,35 @@ class ResonanceHandler:
             s6 = s**6
             
             return (
-            rcont2[4:6]
-            + rcont3[4:6] * (1 - 2 * s)
-            + rcont4[4:6] * (2 * s - 3 * s2)
-            + rcont5[4:6] * (2 * s - 6 * s2 + 4 * s3)
-            + rcont6[4:6] * (3 * s2 - 8 * s3 + 5 * s4)
-            + rcont7[4:6] * (3 * s2 - 12 * s3 + 15 * s4 - 6 * s5)
-            + rcont8[4:6] * (4 * s3 - 15 * s4 + 18 * s5 - 7 * s6)
+            rcont2[3:6]
+            + rcont3[3:6] * (1 - 2 * s)
+            + rcont4[3:6] * (2 * s - 3 * s2)
+            + rcont5[3:6] * (2 * s - 6 * s2 + 4 * s3)
+            + rcont6[3:6] * (3 * s2 - 8 * s3 + 5 * s4)
+            + rcont7[3:6] * (3 * s2 - 12 * s3 + 15 * s4 - 6 * s5)
+            + rcont8[3:6] * (4 * s3 - 15 * s4 + 18 * s5 - 7 * s6)
             )
         
-        #Omega_phi_direct, Omega_theta_direct, Omega_r_direct = get_fundamental_frequencies(integrator.a,p,e,x)    
-        
-        # Evaluate the frequencies at the end of the ODE step
-        Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(1)
-        
-        #print(Omega_theta_spline/Omega_r_spline, Omega_theta_direct/Omega_r_direct, 2*Omega_theta_spline - 3*Omega_r_spline)
-        
         def surface_def(s):
-            Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(s)
-            return self.kappa_theta*Omega_theta_spline + self.kappa_r*Omega_r_spline
+            Omega_phi_spline, Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(s)
+            return self.kappa_r*Omega_r_spline + self.kappa_theta*Omega_theta_spline + self.kappa_phi*Omega_phi_spline
+
+        # Evaluate the frequencies at the end of the ODE step
+        # Omega_phi_spline, Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(1)
+        # Omega_phi_direct, Omega_theta_direct, Omega_r_direct = get_fundamental_frequencies(integrator.a,p,e,x)    
+        
+        # print(Omega_phi_spline/Omega_r_spline, Omega_phi_direct/Omega_r_direct, Omega_theta_spline/Omega_r_spline, Omega_theta_direct/Omega_r_direct)
+        # print(surface_def(1))
+
+        if(self.first_run == 1):
+            self.sign = np.sign(surface_def(0))
             
         # To convert to t we need Delta t
         t_step_minus1 = integrator._integrator_t_cache[integrator.traj_step - 1]/integrator.Msec
         Deltat = t - t_step_minus1
         
         # Check if we cross a resonance
-        if((surface_def(1) > 0) and self.after_res == 0):
+        if((np.sign(surface_def(1)) != self.sign) and self.after_res == 0):
             #print("Surface crossed near t = ", t, " where p = ", p, ", e = ", e, " x = ", x)
             s_surface = brentq(surface_def, 0, 1)
             t_surface = s_surface*Deltat + t_step_minus1
