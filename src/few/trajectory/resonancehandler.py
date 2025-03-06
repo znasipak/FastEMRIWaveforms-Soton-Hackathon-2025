@@ -1,8 +1,6 @@
 import numpy as np
 from scipy.optimize import brentq
 
-from multispline.spline import CubicSpline
-
 from ..utils.utility import (
     ELQ_to_pex,
     get_kerr_geo_constants_of_motion,
@@ -11,7 +9,7 @@ from ..utils.utility import (
 
 class ResonanceHandler:
     
-    def __init__(self, kappa_r, kappa_theta, kappa_phi):
+    def __init__(self, kappa_r, kappa_theta, kappa_phi, jumps):
         self.after_res = 0
         
         self.kappa_r = kappa_r
@@ -19,10 +17,9 @@ class ResonanceHandler:
         self.kappa_phi = kappa_phi
         
         #Load the jump data and interpolate it
-        jump_data = np.loadtxt("/Users/niels/Downloads/resonance-a09_x1_n1k2m-2.csv", delimiter=",")
-        self.jump_E = CubicSpline(jump_data[:,1], jump_data[:,2])
-        self.jump_L = CubicSpline(jump_data[:,1], jump_data[:,3])
-        self.jump_Q = CubicSpline(jump_data[:,1], jump_data[:,4])
+        self.jump_E = jumps[0] 
+        self.jump_L = jumps[1]
+        self.jump_Q = jumps[2]
         
         
     # we need to return the t and y on the resonance surface, and also the updated spline information (TODO)    
