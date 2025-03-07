@@ -221,9 +221,6 @@ class Integrate:
         # add the first point
         self.save_point(t0, y)
         self._integrator_t_cache[0] = t0
-        
-        if(self.resonance_handler != None):
-            self.resonance_handler.after_res = 0
                 
         # run
         while t < self.tmax_dimensionless:

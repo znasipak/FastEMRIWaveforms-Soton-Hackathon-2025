@@ -9,18 +9,19 @@ from ..utils.utility import (
 
 class ResonanceHandler:
     
-    def __init__(self, kappa_r, kappa_theta, kappa_phi, jumps):
+    def __init__(self, kappa_r, kappa_theta, kappa_phi, kappa_f, f_res, jump_func):
         self.first_run = 1
         self.after_res = 0
         
         self.kappa_r = kappa_r
         self.kappa_theta = kappa_theta
         self.kappa_phi = kappa_phi
+        self.kappa_f = kappa_f
+
+        self.f_res = f_res
         
         #Load the jump data and interpolate it
-        self.jump_E = jumps[0] 
-        self.jump_L = jumps[1]
-        self.jump_Q = jumps[2]
+        self.jump_func = jump_func
         
         
     # we need to return the t and y on the resonance surface, and also the updated spline information (TODO)    
@@ -43,15 +44,8 @@ class ResonanceHandler:
             s4 = s**4
             s5 = s**5
             s6 = s**6
-            return rcont1 + s * (
-                        rcont2
-                        + s1
-                        * (
-                            rcont3
-                            + s
-                            * (rcont4 + s1 * (rcont5 + s * (rcont6 + s1 * (rcont7 + s * rcont8))))
-                        )
-                    )
+            return rcont1 + s * (rcont2 + s1 * (rcont3 + s
+                            * (rcont4 + s1 * (rcont5 + s * (rcont6 + s1 * (rcont7 + s * rcont8))))))
         
         # function to calculate the derivatives of the phases w.r.t. s = (t - t0)/(Delta t)
         def dPhi_alpha_by_ds(s): 
@@ -73,7 +67,7 @@ class ResonanceHandler:
         
         def surface_def(s):
             Omega_phi_spline, Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(s)
-            return self.kappa_r*Omega_r_spline + self.kappa_theta*Omega_theta_spline + self.kappa_phi*Omega_phi_spline
+            return self.kappa_r*Omega_r_spline + self.kappa_theta*Omega_theta_spline + self.kappa_phi*Omega_phi_spline + self.kappa_f*self.f_res(integrator.a,p,e,x)
 
         # Evaluate the frequencies at the end of the ODE step
         # Omega_phi_spline, Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(1)
@@ -99,8 +93,10 @@ class ResonanceHandler:
             #print("Surface at t = ", t_surface, " where p = ", p_surface, ", e = ", e_surface, " x = ", x_surface)
             
             E_surface, L_surface, Q_surface = get_kerr_geo_constants_of_motion(integrator.a, p_surface, e_surface, x_surface)
+
+            jump_E, jump_L, jump_Q = self.jump_func(integrator.a, e_surface, x_surface)
             
-            new_p, new_e, new_x = ELQ_to_pex(integrator.a, E_surface + self.jump_E(e_surface), L_surface + self.jump_L(e_surface), Q_surface + self.jump_Q(e_surface))
+            new_p, new_e, new_x = ELQ_to_pex(integrator.a, E_surface + jump_E, L_surface + jump_L, Q_surface + jump_Q)
         
             t = t_surface
             y[0] = new_p
