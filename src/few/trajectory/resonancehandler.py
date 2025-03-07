@@ -9,7 +9,7 @@ from ..utils.utility import (
 
 class ResonanceHandler:
     
-    def __init__(self, kappa_r, kappa_theta, kappa_phi, kappa_f, f_res, jump_func):
+    def __init__(self, kappa_r, kappa_theta, kappa_phi, kappa_f, jump_func, f_res=None):
         self.first_run = 1
         self.after_res = 0
         
@@ -18,7 +18,12 @@ class ResonanceHandler:
         self.kappa_phi = kappa_phi
         self.kappa_f = kappa_f
 
-        self.f_res = f_res
+        self.verbose = 0
+
+        if(f_res != None):
+            self.f_res = f_res
+        else:
+            self.f_res = lambda a, p, e, x : 0
         
         #Load the jump data and interpolate it
         self.jump_func = jump_func
@@ -74,7 +79,7 @@ class ResonanceHandler:
         # Omega_phi_direct, Omega_theta_direct, Omega_r_direct = get_fundamental_frequencies(integrator.a,p,e,x)    
         
         # print(Omega_phi_spline/Omega_r_spline, Omega_phi_direct/Omega_r_direct, Omega_theta_spline/Omega_r_spline, Omega_theta_direct/Omega_r_direct)
-        # print(surface_def(1))
+        if(self.verbose): print(t, "res cond: " , surface_def(1))
 
         if(self.first_run == 1):
             self.sign = np.sign(surface_def(0))
@@ -85,12 +90,12 @@ class ResonanceHandler:
         
         # Check if we cross a resonance
         if((np.sign(surface_def(1)) != self.sign) and self.after_res == 0):
-            #print("Surface crossed near t = ", t, " where p = ", p, ", e = ", e, " x = ", x)
+            if(self.verbose): print("Surface crossed near t = ", t, " where p = ", p, ", e = ", e, " x = ", x)
             s_surface = brentq(surface_def, 0, 1)
             t_surface = s_surface*Deltat + t_step_minus1
             p_surface, e_surface, x_surface, Phi_phi_surface, Phi_theta_surface, Phi_r_surface = y_of_s(s_surface)
-            #print("Surface at s = ", s_surface)
-            #print("Surface at t = ", t_surface, " where p = ", p_surface, ", e = ", e_surface, " x = ", x_surface)
+            if(self.verbose): print("Surface at s = ", s_surface)
+            if(self.verbose): print("Surface at t = ", t_surface, " where p = ", p_surface, ", e = ", e_surface, " x = ", x_surface)
             
             E_surface, L_surface, Q_surface = get_kerr_geo_constants_of_motion(integrator.a, p_surface, e_surface, x_surface)
 
@@ -106,7 +111,7 @@ class ResonanceHandler:
             y[4] = Phi_theta_surface
             y[5] = Phi_r_surface
             
-            #print("Parameters after resonances = ", t_surface, " where p = ", y[0], ", e = ", y[1], " x = ", y[2])
+            if(self.verbose): print("Parameters after resonances = ", t_surface, " where p = ", y[0], ", e = ", y[1], " x = ", y[2])
             
             #update the spline info (computed in FEW_splines.nb)
             spline_info[:, 0] = rcont1
