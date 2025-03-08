@@ -221,6 +221,10 @@ class Integrate:
         # add the first point
         self.save_point(t0, y)
         self._integrator_t_cache[0] = t0
+
+        # If you re-run the trajectory we need to reset the count of which resonance surfaces were crossed
+        if(self.resonance_handler != None):
+            self.resonance_handler.after_res = np.zeros(len(self.resonance_handler.res_list))
                 
         # run
         while t < self.tmax_dimensionless:
