@@ -224,7 +224,7 @@ class Integrate:
 
         # If you re-run the trajectory we need to reset the count of which resonance surfaces were crossed
         if(self.resonance_handler != None):
-            self.resonance_handler.after_res = np.zeros(len(self.resonance_handler.res_list))
+            self.resonance_handler.first_run = 1
                 
         # run
         while t < self.tmax_dimensionless:

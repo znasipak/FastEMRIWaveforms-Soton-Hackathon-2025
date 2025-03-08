@@ -20,29 +20,6 @@ class ResonanceHandler:
         # The first time we run this code we need to store the signs of the resonances conditions
         self.first_run = 1
 
-        # This stores whether we have crossed each resonance surface
-        self.after_res = np.zeros(len(res_list))
-
-        # self.kappa_r = res_list[0]['kappa_r']
-        # self.kappa_theta = res_list[0]['kappa_theta']
-        # self.kappa_phi = res_list[0]['kappa_phi']
-        # self.jump_func = res_list[0]['jump_func']
-
-        # if('kappa_f' in res_list[0]):
-        #     self.kappa_f = res_list[0]['kappa_f']
-        # else:
-        #     self.kappa_f = 0
-
-        # if('f_res' in res_list[0]):
-        #     self.f_res = res_list[0]['f_res']
-        # else:
-        #     self.f_res = lambda a, p, e, x : 0
-
-        #self.kappa_r, self.kappa_theta, self.kappa_phi, self.kappa_f, self.jump_func, self.f_res = res_list[0]
-        
-        #if(self.f_res == None): self.f_res = lambda a, p, e, x : 0
-        
-
         
         
     # we need to return the t and y on the resonance surface, and also the updated spline information (TODO)    
@@ -106,20 +83,22 @@ class ResonanceHandler:
         # print(Omega_phi_spline/Omega_r_spline, Omega_phi_direct/Omega_r_direct, Omega_theta_spline/Omega_r_spline, Omega_theta_direct/Omega_r_direct)
 
         if(self.first_run == 1):
-            self.sign = np.sign(surface_def(0))
-            if(self.verbose): print("Initial signs of res cond:", self.sign)
-        
+            self.sign0 = np.sign(surface_def(0))
+            if(self.verbose): print("Initial signs of res cond:", self.sign0)
+
         if(self.verbose): print(t, "res cond: " , surface_def(1))
 
-
+        self.sign1 = np.sign(surface_def(1))
             
         # To convert to t we need Delta t
         t_step_minus1 = integrator._integrator_t_cache[integrator.traj_step - 1]/integrator.Msec
         Deltat = t - t_step_minus1
         
         # Check if we cross a resonance
-        if((np.sign(surface_def(1)) != self.sign) and self.after_res == 0):
-            if(self.verbose): print("Surface crossed near t = ", t, " where p = ", p, ", e = ", e, " x = ", x)
+        if(self.sign1 != self.sign0):
+            if(self.verbose): 
+                print("Integrator crossed ", np.sum(np.absolute(self.sign0 - self.sign1))/2, " surfaces on this step")
+                print("Surface crossed near t = ", t, " where p = ", p, ", e = ", e, " x = ", x)
             s_surface = brentq(surface_def0, 0, 1)
             t_surface = s_surface*Deltat + t_step_minus1
             p_surface, e_surface, x_surface, Phi_phi_surface, Phi_theta_surface, Phi_r_surface = y_of_s(s_surface)
@@ -153,7 +132,9 @@ class ResonanceHandler:
             spline_info[:, 7] = rcont8*s_surface**7
             
             
-            self.after_res[0] = 1
+            #self.after_res[0] = 1
+
+        self.sign0 = self.sign1
 
         # we need to return the t and y on the resonance surface, and also the updated spline information (TODO)
         return t, y, spline_info
