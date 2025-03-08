@@ -68,10 +68,6 @@ class ResonanceHandler:
             Omega_phi_spline, Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(s)
             
             return list(map(lambda x: x['kappa_r']*Omega_r_spline + x['kappa_theta']*Omega_theta_spline + x['kappa_phi']*Omega_phi_spline + x['kappa_f']*x['f_res'](integrator.a,p,e,x), self.res_list))
-
-        #this is a hack (to be removed)
-        def surface_def0(s):
-            return surface_def(s)[0]
             
             
             #return self.kappa_r*Omega_r_spline + self.kappa_theta*Omega_theta_spline + self.kappa_phi*Omega_phi_spline + self.kappa_f*self.f_res(integrator.a,p,e,x)
@@ -98,8 +94,19 @@ class ResonanceHandler:
         if(self.sign1 != self.sign0):
             if(self.verbose): 
                 print("Integrator crossed ", np.sum(np.absolute(self.sign0 - self.sign1))/2, " surfaces on this step")
-                print("Surface crossed near t = ", t, " where p = ", p, ", e = ", e, " x = ", x)
-            s_surface = brentq(surface_def0, 0, 1)
+                print("At least one surface crossed near t = ", t, " where p = ", p, ", e = ", e, " x = ", x)
+
+            # List of indices of surfaces crossed
+            surfaces_crossed = np.nonzero(self.sign0 - self.sign1)[0]
+            surfaces_crossed_s_values = np.zeros(len(surfaces_crossed))
+
+            for i, surface_index in enumerate(surfaces_crossed):
+                surfaces_crossed_s_values[i] = brentq(lambda s: surface_def(s)[int(surface_index)], 0, 1)
+
+            min_s_value = np.min(surfaces_crossed_s_values)
+            min_s_value_index = np.argmin(surfaces_crossed_s_values)
+
+            s_surface = min_s_value
             t_surface = s_surface*Deltat + t_step_minus1
             p_surface, e_surface, x_surface, Phi_phi_surface, Phi_theta_surface, Phi_r_surface = y_of_s(s_surface)
             if(self.verbose): print("Surface at s = ", s_surface)
@@ -107,7 +114,7 @@ class ResonanceHandler:
             
             E_surface, L_surface, Q_surface = get_kerr_geo_constants_of_motion(integrator.a, p_surface, e_surface, x_surface)
 
-            jump_E, jump_L, jump_Q = self.res_list[0]['jump_func'](integrator.a, e_surface, x_surface)
+            jump_E, jump_L, jump_Q = self.res_list[min_s_value_index]['jump_func'](integrator.a, e_surface, x_surface)
             
             new_p, new_e, new_x = ELQ_to_pex(integrator.a, E_surface + jump_E, L_surface + jump_L, Q_surface + jump_Q)
         
