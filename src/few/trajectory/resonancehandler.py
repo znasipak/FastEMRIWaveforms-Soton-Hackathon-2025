@@ -9,12 +9,11 @@ from ..utils.utility import (
 
 class ResonanceHandler:
     
-    #def __init__(self, kappa_r, kappa_theta, kappa_phi, kappa_f, jump_func, f_res=None):
     def __init__(self, res_list):
 
         self.res_list = res_list
 
-        #Check if kappa_f or f_res are missing and if so set them to zero
+        #Check if kappa_f or f_res are missing from the resonance description and if so set them to zero
         for res in self.res_list:
             if ('kappa_f' not in res) or ('f_res' not in res):
                 res['kappa_f'] = 0
@@ -26,13 +25,15 @@ class ResonanceHandler:
         # Set to 2 to print verbose debugging at each time step
         self.verbose = 0
 
-        # The first time we run this code we need to store the signs of the resonances conditions
+        # The first time we run this code we need to store the signs of the resonance conditions
         self.first_run = 1
 
-    # we need to return the t and y on the resonance surface, and also the updated spline information (TODO)    
+    # This is the function called at each time step by the integrator action_function
     def check_for_resonance_crossing(self, t, y, spline_info, integrator):
+        # Check: can the integrator variables be other than p,e,x?
         p, e, x = y[:3]
-        
+
+        # Exact the coefficients of the spline over the current time step
         rcont1 = spline_info[:,  0]    
         rcont2 = spline_info[:,  1]
         rcont3 = spline_info[:,  2]
@@ -41,7 +42,8 @@ class ResonanceHandler:
         rcont6 = spline_info[:,  5]
         rcont7 = spline_info[:,  6]
         rcont8 = spline_info[:,  7]
-        
+
+        # function to calculate the spline at arbitrary values of s in [0,1]
         def y_of_s(s):
             s1 = 1.0 - s
             s2 = s**2
@@ -74,34 +76,24 @@ class ResonanceHandler:
         t_step_minus1 = integrator._integrator_t_cache[integrator.traj_step - 1]/integrator.Msec
         Deltat = t - t_step_minus1
 
-        # Calculate the resonance conditions for every surface
+        # Function to calculate the resonance conditions for every surface
         def surface_def(s):
             Omega_phi_spline, Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(s)/Deltat
             
             return list(map(lambda x: x['kappa_r']*Omega_r_spline + x['kappa_theta']*Omega_theta_spline + x['kappa_phi']*Omega_phi_spline + x['kappa_f']*x['f_res'](integrator.a,p,e,x), self.res_list))
-                        
-            #return self.kappa_r*Omega_r_spline + self.kappa_theta*Omega_theta_spline + self.kappa_phi*Omega_phi_spline + self.kappa_f*self.f_res(integrator.a,p,e,x)
-
-        # Evaluate the frequencies at the end of the ODE step
-        # Omega_phi_spline, Omega_theta_spline, Omega_r_spline = dPhi_alpha_by_ds(1)
         
-        # print(Omega_phi_spline/Omega_r_spline, Omega_phi_direct/Omega_r_direct, Omega_theta_spline/Omega_r_spline, Omega_theta_direct/Omega_r_direct)
-
+        # The first time this function is run we need to store the values of the res. conds. at s=0
         if(self.first_run == 1):
             self.sign0 = np.sign(surface_def(0))
+            self.first_run = 0
             if(self.verbose == 2): print("Initial signs of res cond:", self.sign0)
 
         if(self.verbose == 2): print(t, "res. condition: ", surface_def(1))
 
-        # Calculate the new resonance condition (at the current time, s=1)
-        # Omega_phi_direct, Omega_theta_direct, Omega_r_direct = get_fundamental_frequencies(integrator.a,p,e,x)
-        # xx = self.res_list[0]
-        # print("Test resonant condition: ", xx['kappa_r']*Omega_r_direct + xx['kappa_theta']*Omega_theta_direct + xx['kappa_phi']*Omega_phi_direct + xx['kappa_f']*xx['f_res'](integrator.a,p,e,x))
-
-        
+        # Calculate the res. conds at s=1
         self.sign1 = np.sign(surface_def(1))
         
-        # Check if we cross a resonance
+        # Check if we cross a resonance by checking for a sign change in any of the resonance conditions
         if((self.sign1 != self.sign0).any()):
             if(self.verbose): 
                 print("\nIntegrator crossed ", int(np.sum(np.absolute(self.sign0 - self.sign1))/2), " surface(s) on this step")
@@ -110,19 +102,15 @@ class ResonanceHandler:
             # List of indices of surfaces crossed
             surfaces_crossed = np.nonzero(self.sign0 - self.sign1)[0]
             if(self.verbose): print("Resonance surfaces crossed: ", surfaces_crossed)
-            surfaces_crossed_s_values = np.zeros(len(surfaces_crossed))
-
+            
             # For every surface crossed find the value of s where the crossing happens
+            surfaces_crossed_s_values = np.zeros(len(surfaces_crossed))
             for i, surface_index in enumerate(surfaces_crossed):
                 surfaces_crossed_s_values[i] = brentq(lambda s: surface_def(s)[int(surface_index)], 0, 1)
 
             # We want to stop at the first surface crossed, which will have the smallest s value
             min_s_value = np.min(surfaces_crossed_s_values)
             min_s_value_index = np.argmin(surfaces_crossed_s_values)
-
-            # To convert to t we need Delta t
-            # t_step_minus1 = integrator._integrator_t_cache[integrator.traj_step - 1]/integrator.Msec
-            # Deltat = t - t_step_minus1
             
             # Calculate the time and (p,e,x) when the first surface is crossed
             s_surface = min_s_value
@@ -151,7 +139,7 @@ class ResonanceHandler:
             
             if(self.verbose): print("Parameters after resonances = ", t_surface, " where p = ", y[0], ", e = ", y[1], " x = ", y[2], "\n")
             
-            #update the spline info (computed in FEW_splines.nb)
+            #update the spline info (computed in by Niels in the Mathematica FEW_splines.nb)
             spline_info[:, 0] = rcont1
             spline_info[:, 1] = s_surface*(rcont2 - (-1 + s_surface)*(rcont3 + s_surface*(rcont4 - (-1 + s_surface)*(rcont5 + s_surface*(rcont6 - (-1 + s_surface)*(rcont7 + rcont8*s_surface))))))
             spline_info[:, 2] = s_surface**2*(rcont3 + (-1 + s_surface)*(rcont4 - (-1 + s_surface)*(rcont5 + s_surface*(rcont6 - (-1 + s_surface)*(rcont7 + rcont8*s_surface)))))
@@ -163,8 +151,6 @@ class ResonanceHandler:
 
             # update sign0 to show we have crossed a resonances surface
             self.sign0[surfaces_crossed[min_s_value_index]] = self.sign1[surfaces_crossed[min_s_value_index]]
-
-        self.first_run = 0
             
         # we need to return the t and y on the resonance surface, and also the updated spline information (TODO)
         return t, y, spline_info
