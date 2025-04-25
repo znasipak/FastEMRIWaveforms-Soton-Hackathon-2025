@@ -42,7 +42,7 @@ class TrajectoryBase(Citable, abc.ABC):
         DENSE_STEPPING: bool = False,
         buffer_length: int = 1000,
         upsample: bool = False,
-        err: float = 1e-11,
+        err: float = 1e-6,
         fix_t: bool = False,
         integrate_backwards: bool = False,
         max_step_size: Optional[float] = None,
@@ -129,7 +129,7 @@ class TrajectoryBase(Citable, abc.ABC):
 
         if max_step_size is None:
             max_step_size = np.inf
-        
+
         if in_coordinate_time:
             kwargs["max_step_size"] = max_step_size * (mu / M) / Msec
         else:

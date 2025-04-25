@@ -21,8 +21,8 @@ from .pydopr853_cpu import controllerSuccess as controllerSuccess_cpu
 np.random.seed(5)
 
 # Tolerances
-# rtol = 0#1e-17
-# abstol = 1e-12
+rtol = 0.0
+atol = 1e-6
 
 # Coefficients for using in Dormand Prince Solver
 c2 = 0.526001519587677318785587544488e-01
@@ -201,6 +201,15 @@ d714 = 0.96324553959188282948394950600e02
 d715 = -0.39177261675615439165231486172e02
 d716 = -0.14972683625798562581422125276e03
 
+# Multiply steps computed from asymptotic behaviour of errors by this.
+SAFETY = 0.9
+
+MIN_FACTOR = 0.2  # Minimum allowed decrease in a step size.
+MAX_FACTOR = 10  # Maximum allowed increase in a step size.
+
+
+from scipy.integrate._ivp import dop853_coefficients
+
 # Some additional constants for the controller
 beta = 0.0
 alpha = 1.0 / 8.0 - beta * 0.2
@@ -241,8 +250,31 @@ class DOPR853:
         # self.error2 = error_cpu
         # self.controllerSuccess2 = controllerSuccess_cpu
 
+        self.n_stages = n_stages = dop853_coefficients.N_STAGES
+        self.order = 8
+        self.error_estimator_order = 7
+        self.error_exponent = -1 / (self.error_estimator_order + 1)
+        self.A = self.xp.asarray(dop853_coefficients.A[:n_stages, :n_stages])
+        self.B = self.xp.asarray(dop853_coefficients.B)
+        self.C = self.xp.asarray(dop853_coefficients.C[:n_stages])
+        self.E3 = self.xp.asarray(dop853_coefficients.E3)
+        self.E5 = self.xp.asarray(dop853_coefficients.E5)
+        self.D = self.xp.asarray(dop853_coefficients.D)
+
+        self.A_EXTRA = self.xp.asarray(dop853_coefficients.A[n_stages + 1 :])
+        self.C_EXTRA = self.xp.asarray(dop853_coefficients.C[n_stages + 1 :])
+        self.INTERPOLATOR_POWER = dop853_coefficients.INTERPOLATOR_POWER
         self.fix_step = False
-        self.abstol = 1e-10
+        self.abstol = atol
+        self.reltol = rtol
+
+    @property
+    def abstol(self):
+        return self._abstol
+
+    @abstol.setter
+    def abstol(self, abstol):
+        self._abstol = abstol
 
     @property
     def xp(self):
@@ -258,120 +290,30 @@ class DOPR853:
         solOld,
         h,
         additionalArgs,
-        k1,
-        k2,
-        k3,
-        k4,
-        k5,
-        k6,
-        k7,
-        k8,
-        k9,
-        k10,
     ):
         # Create temporary index for use in loops
-
         # Step 1
         arg = solOld.copy()
         xCurrent = x.copy()
+        self.ode(xCurrent, arg, self.K[0], additionalArgs)
+        for s, (a, c) in enumerate(zip(self.A[1:], self.C[1:]), start=1):
+            dy = (
+                self.xp.einsum(
+                    "ijk,i->jk",
+                    self.K[:s],
+                    a[:s],
+                )
+                * h[None, :]
+            )
+            xCurrent = x + c * h
+            arg = solOld + dy
+            self.ode(xCurrent, arg, self.K[s], additionalArgs)
 
-        self.ode(xCurrent, arg, k1, additionalArgs)
-
-        # Step 2
-        arg[:] = solOld + h * (a21 * k1)
-        xCurrent = x + c2 * h
-
-        self.ode(xCurrent, arg, k2, additionalArgs)
-
-        # Step 3
-        arg[:] = solOld + h * (a31 * k1 + a32 * k2)
-        xCurrent = x + c3 * h
-
-        self.ode(xCurrent, arg, k3, additionalArgs)
-
-        # Step 4
-        arg[:] = solOld + h * (a41 * k1 + a43 * k3)
-        xCurrent = x + c4 * h
-
-        self.ode(xCurrent, arg, k4, additionalArgs)
-
-        # Step 5
-        arg[:] = solOld + h * (a51 * k1 + a53 * k3 + a54 * k4)
-        xCurrent = x + c5 * h
-
-        self.ode(xCurrent, arg, k5, additionalArgs)
-
-        # Step 6
-        # pragma unroll
-        arg[:] = solOld + h * (a61 * k1 + a64 * k4 + a65 * k5)
-        xCurrent = x + c6 * h
-
-        self.ode(xCurrent, arg, k6, additionalArgs)
-
-        # Step 7
-        arg[:] = solOld + h * (a71 * k1 + a74 * k4 + a75 * k5 + a76 * k6)
-        xCurrent = x + c7 * h
-
-        self.ode(xCurrent, arg, k7, additionalArgs)
-
-        # Step 8
-        arg[:] = solOld + h * (a81 * k1 + a84 * k4 + a85 * k5 + a86 * k6 + a87 * k7)
-        xCurrent = x + c8 * h
-
-        self.ode(xCurrent, arg, k8, additionalArgs)  #
-
-        # Step 9
-        arg[:] = solOld + h * (
-            a91 * k1 + a94 * k4 + a95 * k5 + a96 * k6 + a97 * k7 + a98 * k8
-        )  #
-        xCurrent = x + c9 * h
-
-        self.ode(xCurrent, arg, k9, additionalArgs)
-
-        # Step 10
-        arg[:] = solOld + h * (
-            a101 * k1
-            + a104 * k4
-            + a105 * k5
-            + a106 * k6
-            + a107 * k7
-            + a108 * k8
-            + a109 * k9
-        )
-        xCurrent = x + c10 * h
-
-        self.ode(xCurrent, arg, k10, additionalArgs)
-
-        # Step 11
-        arg[:] = solOld + h * (
-            a111 * k1
-            + a114 * k4
-            + a115 * k5
-            + a116 * k6
-            + a117 * k7
-            + a118 * k8
-            + a119 * k9
-            + a1110 * k10
-        )
-        xCurrent = x + c11 * h
-
-        self.ode(xCurrent, arg, k2, additionalArgs)
-
-        # Step 12 - Note the use of x + h for this step
-        arg[:] = solOld + h * (
-            a121 * k1
-            + a124 * k4
-            + a125 * k5
-            + a126 * k6
-            + a127 * k7
-            + a128 * k8
-            + a129 * k9
-            + a1210 * k10
-            + a1211 * k2
-        )
+        arg = solOld + h * self.xp.einsum("ijk,i->jk", self.K[:-1], self.B)
         xCurrent = x + h
+        self.ode(xCurrent, arg, self.K[-1], additionalArgs)
 
-        self.ode(xCurrent, arg, k3, additionalArgs)
+        solOld[:] = arg[:]
 
     # Error calculation
     def error(
@@ -380,19 +322,24 @@ class DOPR853:
         solOld,
         solNew,
         h,
-        k1,
-        k2,
-        k3,
-        k6,
-        k7,
-        k8,
-        k9,
-        k10,
     ):
+        scale = (
+            self.abstol
+            + self.xp.maximum(self.xp.abs(solOld), self.xp.abs(solNew)) * self.reltol
+        )
+
         # Variables used in system
         # err     = 0.0
         # double err2 = 0.0
         # double sk, denom, temp
+        err5 = self.xp.einsum("ijk,i->jk", self.K, self.E5) / scale
+        err3 = self.xp.einsum("ijk,i->jk", self.K, self.E3) / scale
+        err5_norm_2 = (err5**2).sum(axis=0)
+        err3_norm_2 = (err3**2).sum(axis=0)
+        denom = err5_norm_2 + 0.01 * err3_norm_2
+        err[:] = self.xp.abs(h) * err5_norm_2 / np.sqrt(denom * len(scale))
+        err[(err5_norm_2 == 0) & (err3_norm_2 == 0)] = 0.0
+        return
 
         err[:] = 0.0
 
@@ -434,7 +381,8 @@ class DOPR853:
                     + er12 * k3
                 )
                 * sk
-            ) ** 2
+            )
+            ** 2
         ).sum(axis=0)
 
         # Now calculate the denominator and return the error
@@ -538,92 +486,109 @@ class DOPR853:
 
         nODE, numSysTemp = solOldTemp.shape
 
-        (
-            k1,
-            k2,
-            k3,
-            k4,
-            k5,
-            k6,
-            k7,
-            k8,
-            k9,
-            k10,
-        ) = [self.xp.zeros((nODE, numSysTemp)) for _ in range(10)]
-
+        self.K_extended = self.xp.empty(
+            (dop853_coefficients.N_STAGES_EXTENDED, nODE, numSysTemp),
+            # dtype=self.y.dtype,
+        )
+        self.K = self.K_extended[: self.n_stages + 1]
+        solNewTemp = solOldTemp.copy()
         self.dormandPrinceSteps(
             xTemp,
-            solOldTemp,
+            solNewTemp,  # TODO: updating solNewTemp in place, should we change?
             hTemp,
             additionalArgsTemp,
-            k1,
-            k2,
-            k3,
-            k4,
-            k5,
-            k6,
-            k7,
-            k8,
-            k9,
-            k10,
         )
 
         if not self.fix_step:
             err = np.zeros_like(xTemp)
-            solNewTemp = np.zeros_like(solOldTemp)
 
             self.error(
                 err,
                 solOldTemp,
                 solNewTemp,
                 hTemp,
-                k1,
-                k2,
-                k3,
-                k6,
-                k7,
-                k8,
-                k9,
-                k10,
                 # numEq,
                 # nargs,
             )
 
-            # hOldTemp[:] = hTemp
-            # xOldTemp[:] = xTemp
+            error_norm = err.copy()
+            step_rejected = self.xp.zeros_like(error_norm, dtype=bool)
+            step_accepted = self.xp.zeros_like(error_norm, dtype=bool)
+            factor = self.xp.zeros_like(error_norm)
 
-            flagSuccess = np.zeros_like(xTemp, dtype=bool)
-
-            if not hasattr(self, "errOldTemp"):
-                self.errOldTemp = np.full_like(err, 1e-4)
-
-            if not hasattr(self, "previousRejectTemp"):
-                self.previousRejectTemp = np.zeros_like(err, dtype=bool)
-
-            errOldTemp = self.errOldTemp[inds].copy()
-            previousRejectTemp = self.previousRejectTemp[inds].copy()
-
-            self.controllerSuccess(
-                flagSuccess,
-                err,
-                errOldTemp,
-                previousRejectTemp,
-                hTemp,
-                xTemp,
-                # numEq,
-                # nargs,
+            factor[((error_norm < 1) & (error_norm != 0))] = self.xp.min(
+                self.xp.asarray(
+                    [
+                        self.xp.full_like(
+                            error_norm[((error_norm < 1) & (error_norm != 0))],
+                            MAX_FACTOR,
+                        ),
+                        SAFETY
+                        * error_norm[((error_norm < 1) & (error_norm != 0))]
+                        ** self.error_exponent,
+                    ]
+                ),
+                axis=0,
             )
 
-            solOldTemp = solOldTemp.reshape(nODE, numSysTemp)
+            factor[self.previous_step_rejected[inds]] = self.xp.min(
+                self.xp.asarray([self.xp.ones_like(factor), factor]), axis=0
+            )
+            step_accepted[((error_norm < 1) & (error_norm != 0))] = True
+            step_rejected[((error_norm < 1) & (error_norm != 0))] = False
+
+            factor[(error_norm == 0)] = MAX_FACTOR
+            step_accepted[(error_norm == 0)] = True
+            step_rejected[(error_norm == 0)] = False
+
+            factor[(error_norm >= 1)] = self.xp.max(
+                self.xp.asarray(
+                    [
+                        self.xp.full_like(error_norm[(error_norm >= 1)], MIN_FACTOR),
+                        SAFETY * error_norm[(error_norm >= 1)] ** self.error_exponent,
+                    ]
+                ),
+                axis=0,
+            )
+            step_accepted[(error_norm >= 1)] = False
+            step_rejected[(error_norm >= 1)] = True
+
+            hTemp *= factor
+            fix_nan = self.xp.isnan(error_norm)
+            hTemp[fix_nan] = hOldTemp[fix_nan] / 2.0
+            step_accepted[fix_nan] = False
+            step_rejected[fix_nan] = True
+
+            # flagSuccess = np.zeros_like(xTemp, dtype=bool)
+
+            # if not hasattr(self, "errOldTemp"):
+            #     self.errOldTemp = np.full_like(err, 1e-4)
+
+            # if not hasattr(self, "previousRejectTemp"):
+            #     self.previousRejectTemp = np.zeros_like(err, dtype=bool)
+
+            # errOldTemp = self.errOldTemp[inds].copy()
+            # previousRejectTemp = self.previousRejectTemp[inds].copy()
+
+            # self.controllerSuccess(
+            #     flagSuccess,
+            #     err,
+            #     errOldTemp,
+            #     previousRejectTemp,
+            #     hTemp,
+            #     xTemp,
+            #     # numEq,
+            #     # nargs,
+            # )
+
+            flagSuccess = step_accepted.copy()
             solOldTemp[:, flagSuccess] = solNewTemp.reshape(nODE, numSysTemp)[
                 :, flagSuccess
             ]
 
             xTemp[flagSuccess] = xTemp[flagSuccess] + hOldTemp[flagSuccess]
-            self.errOldTemp[inds[flagSuccess]] = err[flagSuccess]
-            self.previousRejectTemp[inds] = ~flagSuccess
-
-            self.k_coefficient_storage = [k1, k2, k3, k4, k5, k6, k7, k8, k9, k10]
+            self.previous_step_accepted[inds] = step_accepted.copy()
+            self.previous_step_rejected[inds] = step_rejected.copy()
 
         else:  # Not controlling for error so return successes and advance xTemp for all
             flagSuccess = np.ones_like(xTemp, dtype=bool)
@@ -642,7 +607,6 @@ class DOPR853:
 
             solOldTemp += hOldTemp * temp
             solOldTemp = solOldTemp.reshape(nODE, numSysTemp)
-
         return flagSuccess
 
     def prep_evaluate_single(self, x0, y0, h0, x1, y1, additionalArgs):
@@ -657,149 +621,53 @@ class DOPR853:
         spline_output = self.prep_evaluate(
             x0_tmp, y0_tmp, h0_tmp, x1_tmp, y1_tmp, additionalArgs
         )
-
-        return spline_output[0]
+        return spline_output[:, :, 0]
 
     def prep_evaluate(self, x0, y0, h0, x1, y1, additionalArgs):
         assert not self.fix_step
+        nODE = y0.shape[0]
+        numSysTemp = y0.shape[1]
+        K = self.K_extended
+        h = h0
 
-        newDer = np.zeros_like(y0)
-        (k1, k2, k3, k4, k5, k6, k7, k8, k9, k10) = self.k_coefficient_storage
+        f = self.xp.zeros_like(y0)
+        self.ode(x1, y1, f, additionalArgs)
+        for s, (a, c) in enumerate(
+            zip(self.A_EXTRA, self.C_EXTRA), start=self.n_stages + 1
+        ):
+            dy = (
+                self.xp.einsum(
+                    "ijk,i->jk",
+                    K[:s],
+                    a[:s],
+                )
+                * h[None, :]
+            )
+            xCurrent = x0 + c * h
+            arg = y0 + dy
+            self.ode(xCurrent, arg, K[s], additionalArgs)
 
-        # Derivative at new time step
-        self.ode(x1, y1, newDer, additionalArgs)
-
-        # Step 1
-        rcont1 = y0
-
-        # Step 2
-        diff = y1 - y0
-        rcont2 = diff
-
-        # Step 3
-        bspl = h0 * k1 - diff
-        rcont3 = bspl
-
-        # Step 4
-        rcont4 = diff - h0 * newDer - bspl
-
-        # Step 5
-        rcont5 = (
-            d41 * k1
-            + d46 * k6
-            + d47 * k7
-            + d48 * k8
-            + d49 * k9
-            + d410 * k10
-            + d411 * k2
-            + d412 * k3
+        F = self.xp.empty(
+            (dop853_coefficients.INTERPOLATOR_POWER, nODE, numSysTemp),
         )
+        # dtype=self.y_old.dtype,
 
-        # Step 6
-        rcont6 = (
-            d51 * k1
-            + d56 * k6
-            + d57 * k7
-            + d58 * k8
-            + d59 * k9
-            + d510 * k10
-            + d511 * k2
-            + d512 * k3
-        )
+        f_old = K[0]
+        delta_y = y1 - y0
 
-        # Step 7
-        rcont7 = (
-            d61 * k1
-            + d66 * k6
-            + d67 * k7
-            + d68 * k8
-            + d69 * k9
-            + d610 * k10
-            + d611 * k2
-            + d612 * k3
-        )
+        F[0] = delta_y
+        F[1] = h * f_old - delta_y
+        F[2] = 2 * delta_y - h * (f + f_old)
+        F[3:] = h * self.xp.einsum("li,ijk->ljk", self.D, K)
+        return F
 
-        # Step 8
-        rcont8 = (
-            d71 * k1
-            + d76 * k6
-            + d77 * k7
-            + d78 * k8
-            + d79 * k9
-            + d710 * k10
-            + d711 * k2
-            + d712 * k3
-        )
-
-        # Now do the additional derivative steps
-
-        # Step 1
-        arg = y0 + h0 * (
-            a141 * k1
-            + a147 * k7
-            + a148 * k8
-            + a149 * k9
-            + a1410 * k10
-            + a1411 * k2
-            + a1412 * k3
-            + a1413 * newDer
-        )
-
-        x1_tmp = x0 + c14 * h0
-
-        self.ode(x1_tmp, arg, k10, additionalArgs)
-
-        # Step 2
-        arg = y0 + h0 * (
-            a151 * k1
-            + a156 * k6
-            + a157 * k7
-            + a158 * k8
-            + a1511 * k2
-            + a1512 * k3
-            + a1513 * newDer
-            + a1514 * k10
-        )
-        x1_tmp = x0 + c15 * h0
-
-        self.ode(x1_tmp, arg, k2, additionalArgs)
-
-        # Step 3
-        arg = y0 + h0 * (
-            a161 * k1
-            + a166 * k6
-            + a167 * k7
-            + a168 * k8
-            + a169 * k9
-            + a1613 * newDer
-            + a1614 * k10
-            + a1615 * k2
-        )
-
-        x1_tmp = x0 + c16 * h0
-
-        self.ode(x1_tmp, arg, k3, additionalArgs)
-
-        # Now complete rcont5-8 with the updated values
-        rcont5 = h0 * (rcont5 + d413 * newDer + d414 * k10 + d415 * k2 + d416 * k3)
-        rcont6 = h0 * (rcont6 + d513 * newDer + d514 * k10 + d515 * k2 + d516 * k3)
-        rcont7 = h0 * (rcont7 + d613 * newDer + d614 * k10 + d615 * k2 + d616 * k3)
-        rcont8 = h0 * (rcont8 + d713 * newDer + d714 * k10 + d715 * k2 + d716 * k3)
-
-        return np.array(
-            [
-                rcont1,
-                rcont2,
-                rcont3,
-                rcont4,
-                rcont5,
-                rcont6,
-                rcont7,
-                rcont8,
-            ]
-        ).T
-
-    def eval(self, t_new: np.ndarray, t_old: np.ndarray, spline_coeffs: np.ndarray):
+    def eval(
+        self,
+        t_new: np.ndarray,
+        t_old: np.ndarray,
+        y_old: np.ndarray,
+        spline_coeffs: np.ndarray,
+    ):
         assert not self.fix_step
 
         t_min = t_old.min()
@@ -816,7 +684,26 @@ class DOPR853:
         # NOT MEMORY EFFICIENT
         tmp_coeffs = spline_coeffs[segments]
         tmp_t_old = t_old[segments]
-        diffs = np.diff(t_old)[segments]
+        tmp_y_old = y_old[segments]
+        x = diffs = (t_new - tmp_t_old) / self.xp.diff(t_old)[segments]
+
+        x = x[:, None]
+        y_out = self.xp.zeros(
+            (
+                len(x),
+                spline_coeffs.shape[1],
+            ),
+        )
+
+        for i, f in enumerate(reversed(tmp_coeffs.transpose(2, 1, 0))):
+            y_out += f.T
+            if i % 2 == 0:
+                y_out *= x
+            else:
+                y_out *= 1 - x
+        y_out += tmp_y_old
+
+        return y_out
 
         assert spline_coeffs.ndim == 3 and spline_coeffs.shape[-1] == 8
 
@@ -1045,6 +932,10 @@ class DOPR853:
         hInit_orig = self.xp.full(numSys, hInit)
         h = self.xp.full_like(x, hInit)
 
+        if not hasattr(self, "previous_step_rejected"):
+            self.previous_step_rejected = self.xp.zeros(1, dtype=bool)
+            self.previous_step_accepted = self.xp.zeros(1, dtype=bool)
+
         # xOld = self.xp.zeros_like(x)
         # hOld = self.xp.zeros_like(h)
 
@@ -1091,7 +982,6 @@ class DOPR853:
         # Use a while loop as it is easier to keep stepping regardless of
 
         individual_loop_flag = self.xp.ones_like(step_num, dtype=bool)
-
         ii = 0
         jj = 0
 
@@ -1136,9 +1026,7 @@ class DOPR853:
             num_add_args = additionalArgs.shape[0]
             # Compute the steps to iterate to the next timestep
 
-            index_here = self.xp.arange(individual_loop_flag.shape[0])[
-                individual_loop_flag
-            ].astype(self.xp.int32)
+            index_here = np.arange(numSys)[individual_loop_flag]
 
             if fix_step:
                 raise NotImplementedError
@@ -1150,7 +1038,7 @@ class DOPR853:
                 tMax,
                 additionalArgsTemp,
                 fix_step=fix_step,
-                inds=np.arange(numSys)[individual_loop_flag],
+                inds=index_here,
             )
 
             if fix_step:
@@ -1202,7 +1090,9 @@ class DOPR853:
                         read_out_ode_dim.get(),
                         read_out_index_update.get(),
                     )
-                ] = solOld[:, index_update].flatten().get()
+                ] = (
+                    solOld[:, index_update].flatten().get()
+                )
                 denseOutputLoc[(step_num[index_update].get(), index_update.get())] = x[
                     index_update
                 ].get()
@@ -1212,6 +1102,7 @@ class DOPR853:
                 ] = solOld[:, index_update].flatten()
                 denseOutputLoc[(step_num[index_update], index_update)] = x[index_update]
 
+            breakpoint()
             if self.stopping_criterion is not None and len(index_update) > 0:
                 stop_temp = self.xp.asarray(
                     self.stopping_criterion(
