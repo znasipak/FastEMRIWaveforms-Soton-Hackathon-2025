@@ -534,9 +534,8 @@ class Integrate:
         return self.trajectory
 
     def rp_insp_end(self, eps):
-        q = 1/eps
-        nu = q/(1+q)**2
-        return (0.0680414 - 0.0340349988 * nu **(1./4.))**(-2./3.)
+        nu = eps/(1+eps)**2
+        return (0.0680413817 - 0.03403499885 * nu **(1./4.))**(-2./3.)
 
     def rp_trans_end(self, eps):
         return 4.85
