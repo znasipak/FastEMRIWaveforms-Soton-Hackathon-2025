@@ -291,13 +291,22 @@ class Integrate:
         self.save_point(t0, y)
         self._integrator_t_cache[0] = t0
 
+        if not hasattr(self, "previous_step_rejected"):
+            self.dopr.previous_step_rejected = np.zeros(1, dtype=bool)
+            self.dopr.previous_step_accepted = np.zeros(1, dtype=bool)
+
         # run
         niter = 0
+        # import time
+
+        # st = time.perf_counter()
+        status = False
         while t < self.tmax_dimensionless:
             if not self.dopr.fix_step:
                 if niter >= self.max_iter:
                     raise ValueError("Integration did not converge within max_iter.")
-
+            # if status == True:
+            #     st = time.perf_counter()
             try:
                 # take a step
                 t_old = t
@@ -342,10 +351,13 @@ class Integrate:
                 self.log_failed_step(ValueError)
                 continue
 
-            if not status:  # the step failed, but we retain the step size as this is the estimate for the next attempt
+            if (
+                not status
+            ):  # the step failed, but we retain the step size as this is the estimate for the next attempt
                 self.log_failed_step(ValueError)
                 continue
-
+            # et = time.perf_counter()
+            # print(et - st, "comp")
             if not self.dopr.fix_step:
                 # prepare output spline information
                 spline_info = self.dopr.prep_evaluate_single(
@@ -377,7 +389,7 @@ class Integrate:
 
             if stop_check:
                 if not self.dopr.fix_step:
-                    self.dopr_spline_output[self.traj_step - 1, :] = spline_info
+                    self.dopr_spline_output[self.traj_step - 1, :] = spline_info.T
                     self._integrator_t_cache[self.traj_step] = t * self.Msec
 
                 # go back to last values
@@ -388,7 +400,7 @@ class Integrate:
             # for adaptive stepping, the last point in the trajectory will be at t = tmax
             if t > self.tmax_dimensionless:
                 if not self.dopr.fix_step:
-                    self.dopr_spline_output[self.traj_step - 1, :] = spline_info
+                    self.dopr_spline_output[self.traj_step - 1, :] = spline_info.T
                     self._integrator_t_cache[self.traj_step] = t * self.Msec
                 break
 
@@ -417,7 +429,7 @@ class Integrate:
 
     def initialize_integrator(
         self,
-        err: float = 1e-11,
+        err: float = 1e-6,
         DENSE_STEPPING: bool = False,
         integrate_backwards: bool = False,
         max_step_size: Optional[float] = None,
@@ -442,10 +454,10 @@ class Integrate:
         else:
             self.max_step_size = max_step_size
 
-        self.trajectory_arr = np.zeros((self.buffer_length, self.nparams + 1))
+        self.spline_cache = np.zeros((self.buffer_length, self.nparams + 1))
         self._integrator_t_cache = np.zeros((self.buffer_length,))
         self.dopr_spline_output = np.zeros(
-            (self.buffer_length, 6, 8)
+            (self.buffer_length, 6, self.dopr.INTERPOLATOR_POWER)
         )  # 3 parameters + 3 phases, 8 coefficients
         self.traj_step = 0
 
@@ -467,7 +479,11 @@ class Integrate:
     @property
     def trajectory(self) -> np.ndarray:
         """Trajectory array."""
-        return self.trajectory_arr[: self.traj_step]
+        # backwards integration requires an additional manipulation to match forwards phase convention
+        _traj = self.trajectory_arr[: self.traj_step]
+        if self.integrate_backwards:
+            _traj[:, 4:7] -= _traj[0, 4:7] + _traj[self.traj_step - 1, 4:7]
+        return _traj
 
     @property
     def integrator_t_cache(self) -> np.ndarray:
@@ -490,13 +506,13 @@ class Integrate:
             spline_output: Spline coefficients from the backend.
 
         """
-        self.trajectory_arr[self.traj_step, 0] = t
-        self.trajectory_arr[self.traj_step, 1:] = y
+        self.spline_cache[self.traj_step, 0] = t
+        self.spline_cache[self.traj_step, 1:] = y.copy()
 
         if spline_output is not None:
             assert self.traj_step >= 0
             self._integrator_t_cache[self.traj_step] = t
-            self.dopr_spline_output[self.traj_step - 1, :] = spline_output
+            self.dopr_spline_output[self.traj_step - 1, :] = spline_output.T.copy()
 
         self.traj_step += 1
         if self.traj_step >= self.buffer_length:
@@ -508,8 +524,8 @@ class Integrate:
                 buffer_increment,
             )
 
-            self.trajectory_arr = np.concatenate(
-                [self.trajectory_arr, np.zeros((buffer_increment, self.nparams + 1))],
+            self.spline_cache = np.concatenate(
+                [self.spline_cache, np.zeros((buffer_increment, self.nparams + 1))],
                 axis=0,
             )
             if not self.dopr.fix_step:
@@ -540,13 +556,14 @@ class Integrate:
             New trajectory.
 
         """
-        t_old = self.integrator_t_cache
+        t_old = self.integrator_t_cache[: self.traj_step]
+        y_old = self.spline_cache[: self.traj_step, 1:]
 
         result = np.zeros((t_new.size, 6))
         t_in_mask = (t_new >= 0.0) & (t_new <= t_old.max())
 
         result[t_in_mask, :] = self.dopr.eval(
-            t_new[t_in_mask], t_old, self.integrator_spline_coeff
+            t_new[t_in_mask], t_old, y_old, self.integrator_spline_coeff
         )
 
         if not self.generating_trajectory:
@@ -577,6 +594,12 @@ class Integrate:
             result[:, 3:6] /= self.massratio
 
         return result
+
+    @property
+    def trajectory_arr(self) -> np.ndarray:
+        _traj = self.spline_cache.copy()
+        _traj[:, 4:7] /= self.massratio
+        return _traj
 
     def run_inspiral(
         self,
@@ -638,14 +661,7 @@ class Integrate:
                 )
 
         # scale phases here by the mass ratio so the cache is accurate
-        self.trajectory_arr[:, 4:7] /= self.massratio
-
-        # backwards integration requires an additional manipulation to match forwards phase convention
-        if self.integrate_backwards:
-            self.trajectory_arr[:, 4:7] -= (
-                self.trajectory_arr[0, 4:7]
-                + self.trajectory_arr[self.traj_step - 1, 4:7]
-            )
+        # self.spline_cache[:, 4:7] /= self.massratio
 
         # Restore normal spline behaviour
         self.generating_trajectory = False
@@ -663,7 +679,6 @@ class Integrate:
             ``True`` if integration should be stopped. ``False`` otherwise.
 
         """
-
         if self.integrate_backwards:
             # this function handles the pex/ELQ conversion internally, in case of ELQ-specific outer boundaries
             distance_to_grid_boundary = self.distance_to_outer_boundary(y)
@@ -678,6 +693,7 @@ class Integrate:
 
             if p - p_sep < self.separatrix_buffer_dist:
                 return True
+        return False
 
     def inner_func_forward(self, t_step):
         """
