@@ -72,6 +72,22 @@ class ResonanceHandler:
             + rcont8[3:6] * (4 * s3 - 15 * s4 + 18 * s5 - 7 * s6)
             )
 
+        def d2Phi_alpha_by_ds(s):
+            s2 = s**2
+            s3 = s**3
+            s4 = s**4
+            s5 = s**5
+            s6 = s**6
+            
+            return (
+                -2 * rcont3[3:6]
+                + rcont4[3:6] * (2 - 6 * s)
+                + rcont5[3:6] * (2 - 12 * s + 12 * s2)
+                + rcont6[3:6] * (6 * s - 24 * s2 + 20 * s3)
+                + rcont7[3:6] * (6 * s - 36 * s2 + 60 * s3 - 30 * s4)
+                + rcont8[3:6] * (12 * s2 - 60 * s3 + 90 * s4 - 42 * s5)
+            )
+
         # To convert to t we need Delta t
         t_step_minus1 = integrator._integrator_t_cache[integrator.traj_step - 1]/integrator.Msec
         Deltat = t - t_step_minus1
@@ -112,10 +128,11 @@ class ResonanceHandler:
             min_s_value = np.min(surfaces_crossed_s_values)
             min_s_value_index = np.argmin(surfaces_crossed_s_values)
             
-            # Calculate the time and (p,e,x) when the first surface is crossed
+            # Calculate the time, (p,e,x), phases and frequency derivatives when the first surface is crossed
             s_surface = min_s_value
             t_surface = s_surface*Deltat + t_step_minus1
             p_surface, e_surface, x_surface, Phi_phi_surface, Phi_theta_surface, Phi_r_surface = y_of_s(s_surface)
+            Omega_phi_dot_surface, Omega_theta_dot_surface, Omega_r_dot_surface = d2Phi_alpha_by_ds(s_surface)/Deltat**2
             if(self.verbose): print("Surface at s = ", s_surface)
             if(self.verbose): print("Surface at t = ", t_surface, " where p = ", p_surface, ", e = ", e_surface, " x = ", x_surface)
 
@@ -123,7 +140,9 @@ class ResonanceHandler:
 
             # Calculate the jumps on the first surface crossed
             E_surface, L_surface, Q_surface = get_kerr_geo_constants_of_motion(integrator.a, p_surface, e_surface, x_surface)
-            jump_E, jump_L, jump_Q = self.res_list[min_s_value_index]['jump_func'](integrator.a, e_surface, x_surface)
+            phases_surface = [Phi_phi_surface, Phi_theta_surface, Phi_r_surface]
+            freq_deriv_surface = [Omega_phi_dot_surface, Omega_theta_dot_surface, Omega_r_dot_surface]
+            jump_E, jump_L, jump_Q = self.res_list[min_s_value_index]['jump_func'](integrator.a, e_surface, x_surface, phases_surface, freq_deriv_surface)
             new_p, new_e, new_x = ELQ_to_pex(integrator.a, E_surface + jump_E, L_surface + jump_L, Q_surface + jump_Q)
 
             # What do we do if applying the jumps pushes the trajectory across another surface?
